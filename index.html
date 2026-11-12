@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0f12">
+<title>Rally Co-driver</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root { --bg:#0d0f12; --panel:#161a20; --line:#2a3039; --ink:#eef1f5; --muted:#8b95a3; --accent:#ffb020; --hard:#ff4d4f; --med:#ffa940; --easy:#52c41a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:16px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  body { display:flex; flex-direction:column; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:17px; margin:0; letter-spacing:.5px; }
+  header h1 b { color:var(--accent); }
+  button { font:inherit; color:var(--ink); background:#232932; border:1px solid var(--line); border-radius:10px; padding:10px 14px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#111; border-color:var(--accent); font-weight:700; }
+  button.danger { background:#3a1517; border-color:#6b2226; }
+  button:disabled { opacity:.45; }
+  input, select { font:inherit; color:var(--ink); background:#0f1216; border:1px solid var(--line); border-radius:10px; padding:10px 12px; width:100%; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > input { flex:1; }
+  #plan { padding:12px 14px; display:flex; flex-direction:column; gap:8px; border-bottom:1px solid var(--line); }
+  .hint { font-size:13px; color:var(--muted); min-height:18px; }
+  .chip { font-size:12px; padding:6px 10px; border-radius:999px; }
+  .chip.on { background:var(--accent); color:#111; border-color:var(--accent); }
+  #map { flex:1; min-height:200px; background:#111; }
+  #preview { max-height:42vh; display:none; flex-direction:column; border-top:1px solid var(--line); background:var(--panel); }
+  #summary { padding:10px 14px; display:flex; flex-wrap:wrap; gap:6px 14px; font-size:14px; color:var(--muted); }
+  #summary b { color:var(--ink); }
+  #actions { padding:0 14px 10px; display:flex; gap:8px; flex-wrap:wrap; }
+  #notelist { overflow:auto; border-top:1px solid var(--line); flex:1; }
+  .n { display:flex; gap:10px; padding:8px 14px; border-bottom:1px solid #1e232a; font-size:15px; }
+  .n .d { color:var(--muted); width:64px; flex:none; font-variant-numeric:tabular-nums; }
+  .g1,.g2 { color:var(--hard); } .g3,.g4 { color:var(--med); } .g5,.g6 { color:var(--easy); } .hz { color:#69b1ff; }
+  #drive { position:fixed; inset:0; background:var(--bg); display:none; flex-direction:column; z-index:1000; padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 14px); }
+  #drive .top { display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:14px; }
+  #call { flex:1; display:flex; align-items:center; justify-content:center; text-align:center; font-weight:800; font-size:clamp(36px, 11vw, 84px); line-height:1.05; text-transform:uppercase; letter-spacing:.5px; padding:10px 0; }
+  #call.flash { animation:flash .5s; }
+  @keyframes flash { from { color:var(--accent);} to { color:var(--ink);} }
+  #next { font-size:20px; color:var(--muted); min-height:90px; }
+  #call small { display:block; font-size:.45em; color:var(--accent); margin-top:8px; letter-spacing:1px; }
+  #next div { display:flex; gap:12px; padding:3px 0; }
+  #next b { text-transform:uppercase; font-weight:600; }
+  #next span { width:72px; flex:none; font-variant-numeric:tabular-nums; }
+  #gauges { display:flex; gap:16px; align-items:center; margin:10px 0; }
+  #speed { font-size:44px; font-weight:800; font-variant-numeric:tabular-nums; }
+  #speedunit { font-size:14px; color:var(--muted); }
+  #limit { width:56px; height:56px; border-radius:50%; border:5px solid #d4380d; background:#fff; color:#111; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px; }
+  #limit.none { visibility:hidden; }
+  #gps { margin-left:auto; font-size:13px; color:var(--muted); text-align:right; }
+  #drive .bottom { display:flex; gap:10px; }
+  #drive .bottom button { flex:1; padding:16px; font-size:18px; }
+  #minimap { height:22vh; border-radius:12px; overflow:hidden; margin-top:8px; }
+  #settings { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:2000; align-items:flex-end; }
+  #settings .sheet { background:var(--panel); width:100%; max-height:85vh; overflow:auto; border-radius:16px 16px 0 0; padding:16px 16px calc(env(safe-area-inset-bottom) + 16px); }
+  #settings label { display:block; font-size:13px; color:var(--muted); margin:12px 0 4px; }
+  .toggles { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .toggles label { display:flex; gap:8px; align-items:center; color:var(--ink); font-size:15px; margin:0; background:#0f1216; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .toggles input { width:auto; }
+  .results button { display:block; width:100%; text-align:left; margin-top:4px; font-size:14px; }
+  .leaflet-container { background:#111; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RALLY <b>CO-DRIVER</b></h1>
+  <button id="btnSettings" class="chip">Settings</button>
+</header>
+
+<section id="plan">
+  <div class="row"><input id="from" placeholder="Start (address or place)" autocomplete="off"><button id="btnHere" title="Use my location">My location</button></div>
+  <div class="results" id="fromResults"></div>
+  <div class="row"><input id="to" placeholder="Destination" autocomplete="off"><button id="btnGo" class="primary">Route</button></div>
+  <div class="results" id="toResults"></div>
+  <div class="row" style="gap:6px;flex-wrap:wrap">
+    <span class="hint" style="min-height:0">Tap map to set:</span>
+    <button class="chip" id="tapStart">Start</button><button class="chip" id="tapEnd">End</button>
+  </div>
+  <div class="hint" id="status"></div>
+</section>
+
+<div id="map"></div>
+
+<section id="preview">
+  <div id="summary"></div>
+  <div id="actions">
+    <button class="primary" id="btnDrive">Drive</button>
+    <button id="btnSim">Simulate</button>
+    <select id="simSpeed" style="width:auto">
+      <option value="60">Sim 60 km/h</option><option value="80" selected>Sim 80 km/h</option><option value="100">Sim 100 km/h</option><option value="120">Sim 120 km/h</option>
+    </select>
+  </div>
+  <div id="notelist"></div>
+</section>
+
+<section id="drive">
+  <div class="top"><span id="driveMode">DRIVE</span><span id="remain"></span></div>
+  <div id="call">READY</div>
+  <div id="next"></div>
+  <div id="gauges">
+    <div><div id="speed">0</div><div id="speedunit">km/h</div></div>
+    <div id="limit" class="none"></div>
+    <div id="gps">GPS: waiting</div>
+  </div>
+  <div class="bottom">
+    <button id="btnMute">Mute</button>
+    <button id="btnStop" class="danger">Stop</button>
+  </div>
+  <div id="minimap"></div>
+</section>
+
+<section id="settings">
+  <div class="sheet">
+    <div class="row" style="justify-content:space-between"><b>Settings</b><button id="btnCloseSettings" class="chip">Done</button></div>
+    <label>Pace notes</label>
+    <select id="setMode"><option value="advanced">Advanced (Left 4, Right 2 tightens)</option><option value="simple">Simple (Easy / Medium / Hard)</option></select>
+    <label>Call timing</label>
+    <select id="setTiming"><option value="early">Early</option><option value="standard">Standard</option><option value="late">Late</option></select>
+    <label>Detail</label>
+    <select id="setDetail"><option value="all">All corners</option><option value="no6">Skip 6s (fast bends)</option><option value="major">Only 1-4 (tight corners)</option></select>
+    <label>Units</label>
+    <select id="setUnits"><option value="metric">Metric (km/h, meters)</option><option value="imperial">Imperial (mph, feet)</option></select>
+    <label>Voice</label>
+    <select id="setVoice"></select>
+    <label>Voice speed</label>
+    <select id="setRate"><option value="1">Normal</option><option value="1.15">Quick</option><option value="1.3">Fast</option></select>
+    <div class="toggles">
+      <label><input type="checkbox" id="setHazards"> Hazards</label>
+      <label><input type="checkbox" id="setCameras"> Speed cameras</label>
+      <label><input type="checkbox" id="setCrests"> Crests (beta)</label>
+      <label><input type="checkbox" id="setCodriver"> Co-driver mode (silent)</label>
+    </div>
+    <div class="row" style="margin-top:14px"><button id="btnTestVoice" style="flex:1">Test voice</button></div>
+    <p class="hint" style="margin-top:12px">Map data &copy; OpenStreetMap contributors. Routing: OSRM. Elevation: Open-Meteo. Calls are computer-generated estimates and can be wrong, late or missing. Watch the road, obey limits.</p>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// Pace-note engine: route geometry + map data -> rally-style notes.
+// Pure functions, no DOM. Works in browser (window.Engine) and node (module.exports).
+(function (root) {
+  const RE = 6371008.8;
+  const D2R = Math.PI / 180;
+  const STEP = 5; // resample spacing, meters
+
+  // ---------- geometry ----------
+  function makeProjection(latlngs) {
+    let s = 0;
+    for (const p of latlngs) s += p[0];
+    const lat0 = s / latlngs.length;
+    const k = Math.cos(lat0 * D2R);
+    return {
+      fwd: (lat, lon) => ({ x: lon * D2R * RE * k, y: lat * D2R * RE }),
+      inv: (x, y) => [y / RE / D2R, x / (RE * k) / D2R],
+    };
+  }
+
+  function resample(pts, step) {
+    const out = [{ x: pts[0].x, y: pts[0].y }];
+    let carry = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const L = Math.hypot(dx, dy);
+      if (L === 0) continue;
+      let d = step - carry;
+      while (d <= L) {
+        out.push({ x: a.x + (dx * d) / L, y: a.y + (dy * d) / L });
+        d += step;
+      }
+      carry = L - (d - step);
+    }
+    const last = pts[pts.length - 1];
+    const tail = out[out.length - 1];
+    if (Math.hypot(last.x - tail.x, last.y - tail.y) > 0.5) out.push({ x: last.x, y: last.y });
+    return out;
+  }
+
+  function smooth(pts, w) {
+    const n = pts.length;
+    return pts.map((p, i) => {
+      if (i < w || i >= n - w) return { x: p.x, y: p.y };
+      let sx = 0, sy = 0;
+      for (let j = -w; j <= w; j++) { sx += pts[i + j].x; sy += pts[i + j].y; }
+      return { x: sx / (2 * w + 1), y: sy / (2 * w + 1) };
+    });
+  }
+
+  function wrap(a) {
+    while (a > Math.PI) a -= 2 * Math.PI;
+    while (a < -Math.PI) a += 2 * Math.PI;
+    return a;
+  }
+
+  // signed Menger curvature, + = left turn (x east, y north)
+  function curvatures(pts, k) {
+    const n = pts.length;
+    const kap = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      const a = pts[Math.max(0, i - k)], b = pts[i], c = pts[Math.min(n - 1, i + k)];
+      const abx = b.x - a.x, aby = b.y - a.y, bcx = c.x - b.x, bcy = c.y - b.y;
+      const cross = abx * bcy - aby * bcx;
+      const d = Math.hypot(abx, aby) * Math.hypot(bcx, bcy) * Math.hypot(c.x - a.x, c.y - a.y);
+      kap[i] = d > 1e-6 ? (2 * cross) / d : 0;
+    }
+    // light smoothing of the curvature signal
+    return kap.map((v, i) => {
+      if (i === 0 || i === n - 1) return v;
+      return (kap[i - 1] + 2 * v + kap[i + 1]) / 4;
+    });
+  }
+
+  // ---------- grading ----------
+  const R_BINS = [20, 40, 70, 120, 200, 400]; // grade 1..6 upper radius
+  const R_MID = [12, 30, 55, 95, 160, 300];
+  function gradeFromRadius(r) {
+    for (let g = 0; g < R_BINS.length; g++) if (r < R_BINS[g]) return g + 1;
+    return 7; // too gentle to call
+  }
+
+  function findCorners(samples, kap, opts) {
+    const KMIN = 1 / 400, KHOLD = KMIN * 0.7;
+    const n = samples.length;
+    const runs = [];
+    let i = 0;
+    while (i < n) {
+      if (Math.abs(kap[i]) >= KMIN) {
+        const dir = Math.sign(kap[i]);
+        let j = i;
+        while (j + 1 < n && Math.sign(kap[j + 1]) === dir && Math.abs(kap[j + 1]) >= KHOLD) j++;
+        runs.push({ a: i, b: j, dir });
+        i = j + 1;
+      } else i++;
+    }
+    // merge same-direction runs separated by small gaps
+    const merged = [];
+    for (const r of runs) {
+      const prev = merged[merged.length - 1];
+      if (prev && prev.dir === r.dir && r.a - prev.b <= 3) prev.b = r.b;
+      else merged.push({ ...r });
+    }
+    const corners = [];
+    for (const r of merged) {
+      let dTheta = 0;
+      for (let j = Math.max(1, r.a); j <= Math.min(n - 1, r.b + 1); j++) dTheta += wrap(samples[j].h - samples[j - 1].h);
+      dTheta = Math.abs(dTheta) / D2R;
+      if (dTheta < 12) continue;
+      let kmax = 0;
+      for (let j = r.a; j <= r.b; j++) kmax = Math.max(kmax, Math.abs(kap[j]));
+      const minR = 1 / kmax;
+      let grade = gradeFromRadius(minR);
+      if (dTheta < 30) grade += 2;
+      else if (dTheta < 60) grade += 1;
+      if (grade >= 7) continue;
+      if (grade === 6 && dTheta < 20) continue;
+      const hairpin = dTheta >= 135 && minR < 25;
+      if (hairpin) grade = 1;
+      const len = (r.b - r.a + 1) * STEP;
+      // shape: entry vs exit radius
+      const third = Math.max(1, Math.floor((r.b - r.a + 1) / 3));
+      let kIn = 0, kOut = 0;
+      for (let j = r.a; j < r.a + third; j++) kIn = Math.max(kIn, Math.abs(kap[j]));
+      for (let j = r.b - third + 1; j <= r.b; j++) kOut = Math.max(kOut, Math.abs(kap[j]));
+      const rIn = 1 / Math.max(kIn, 1e-9), rOut = 1 / Math.max(kOut, 1e-9);
+      let shape = null;
+      if (len >= 30) {
+        if (rOut < 0.6 * rIn && gradeFromRadius(rOut) < gradeFromRadius(rIn)) shape = 'tightens';
+        else if (rIn < 0.6 * rOut && gradeFromRadius(rIn) < gradeFromRadius(rOut)) shape = 'opens';
+      }
+      const arc90 = (R_MID[grade - 1] * Math.PI) / 2;
+      const long = !hairpin && (dTheta > 150 || len > 1.8 * arc90);
+      corners.push({
+        kind: 'corner', s: samples[r.a].s, sEnd: samples[r.b].s, i0: r.a, i1: r.b,
+        dir: r.dir > 0 ? 'left' : 'right', grade, hairpin, shape, long,
+        minR: Math.round(minR), dTheta: Math.round(dTheta), len,
+      });
+    }
+    return corners;
+  }
+
+  // ---------- map-data matching ----------
+  function buildGrid(samples, cell) {
+    const g = new Map();
+    samples.forEach((p, i) => {
+      const key = Math.floor(p.x / cell) + ',' + Math.floor(p.y / cell);
+      if (!g.has(key)) g.set(key, []);
+      g.get(key).push(i);
+    });
+    return {
+      near(x, y, r) {
+        const out = [];
+        const cx = Math.floor(x / cell), cy = Math.floor(y / cell), span = Math.ceil(r / cell);
+        for (let a = -span; a <= span; a++)
+          for (let b = -span; b <= span; b++) {
+            const l = g.get(cx + a + ',' + (cy + b));
+            if (l) out.push(...l);
+          }
+        return out;
+      },
+    };
+  }
+
+  function nearestSample(samples, grid, x, y, r) {
+    let best = -1, bd = r;
+    for (const i of grid.near(x, y, r)) {
+      const d = Math.hypot(samples[i].x - x, samples[i].y - y);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+
+  const UNPAVED = new Set(['unpaved', 'gravel', 'fine_gravel', 'dirt', 'earth', 'ground', 'compacted', 'sand', 'grass', 'mud', 'pebblestone', 'rock', 'woodchips']);
+  const COBBLE = new Set(['sett', 'cobblestone', 'unhewn_cobblestone', 'paving_stones']);
+
+  // Assign each route sample to an OSM way running alongside it (same direction).
+  function matchWays(samples, grid, proj, ways) {
+    const assigned = new Array(samples.length).fill(null);
+    const bestD = new Array(samples.length).fill(12);
+    for (const w of ways) {
+      if (!w.geometry || w.geometry.length < 2) continue;
+      const g = w.geometry.map((p) => proj.fwd(p.lat, p.lon));
+      for (let j = 1; j < g.length; j++) {
+        const a = g[j - 1], b = g[j];
+        const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+        if (L2 === 0) continue;
+        const segH = Math.atan2(dx, dy);
+        const L = Math.sqrt(L2);
+        const steps = Math.max(1, Math.ceil(L / 20));
+        const seen = new Set();
+        for (let t = 0; t <= steps; t++) {
+          const px = a.x + (dx * t) / steps, py = a.y + (dy * t) / steps;
+          for (const i of grid.near(px, py, 25)) seen.add(i);
+        }
+        for (const i of seen) {
+          const p = samples[i];
+          let u = ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2;
+          u = Math.max(0, Math.min(1, u));
+          const d = Math.hypot(a.x + u * dx - p.x, a.y + u * dy - p.y);
+          if (d >= bestD[i]) continue;
+          const dh = Math.abs(wrap(segH - p.h));
+          if (dh > 0.6 && dh < Math.PI - 0.6) continue; // crossing road, not ours
+          bestD[i] = d;
+          assigned[i] = w.tags || {};
+        }
+      }
+    }
+    return assigned;
+  }
+
+  // Runs of samples where pred(tags) holds, at least minLen meters long.
+  function runsWhere(samples, assigned, pred, minLen) {
+    const out = [];
+    let start = -1, gap = 0;
+    for (let i = 0; i <= samples.length; i++) {
+      const on = i < samples.length && assigned[i] && pred(assigned[i]);
+      if (on) { if (start < 0) start = i; gap = 0; }
+      else if (start >= 0) {
+        gap++;
+        if (gap > 2 || i === samples.length) {
+          const end = i - gap;
+          if ((end - start + 1) * STEP >= minLen) out.push({ a: start, b: end });
+          start = -1; gap = 0;
+        }
+      }
+    }
+    return out;
+  }
+
+  // ---------- crests from elevation ----------
+  function findCrests(samples, elev, skip) {
+    // elev: array of {i, z} at roughly 30 m spacing
+    if (!elev || elev.length < 7) return [];
+    const z = elev.map((e, k) => {
+      const lo = Math.max(0, k - 1), hi = Math.min(elev.length - 1, k + 1);
+      let s = 0; for (let j = lo; j <= hi; j++) s += elev[j].z;
+      return s / (hi - lo + 1);
+    });
+    const crests = [];
+    for (let k = 2; k < elev.length - 2; k++) {
+      if (skip[elev[k].i]) continue;
+      const ds1 = samples[elev[k].i].s - samples[elev[k - 2].i].s;
+      const ds2 = samples[elev[k + 2].i].s - samples[elev[k].i].s;
+      if (ds1 <= 0 || ds2 <= 0) continue;
+      const gIn = (z[k] - z[k - 2]) / ds1, gOut = (z[k + 2] - z[k]) / ds2;
+      if (z[k] >= z[k - 1] && z[k] >= z[k + 1] && gIn > 0.03 && gOut < -0.03 && gIn - gOut > 0.07) {
+        const s = samples[elev[k].i].s;
+        if (!crests.length || s - crests[crests.length - 1].s > 80) crests.push({ kind: 'crest', s, i0: elev[k].i });
+      }
+    }
+    return crests;
+  }
+
+  // ---------- main ----------
+  // input: { latlngs:[[lat,lon]...], steps:[osrm steps], osm:{elements}, elevation:[{i,z}] }
+  function prepare(latlngs) {
+    const proj = makeProjection(latlngs);
+    const raw = latlngs.map(([la, lo]) => proj.fwd(la, lo));
+    const rs = resample(raw, STEP);
+    const sm = smooth(rs, 2);
+    const samples = sm.map((p, i) => ({ x: p.x, y: p.y, s: i * STEP, h: 0 }));
+    for (let i = 0; i < samples.length; i++) {
+      const a = samples[Math.max(0, i - 1)], b = samples[Math.min(samples.length - 1, i + 1)];
+      samples[i].h = Math.atan2(b.x - a.x, b.y - a.y);
+    }
+    samples.forEach((p) => { const ll = proj.inv(p.x, p.y); p.lat = ll[0]; p.lon = ll[1]; });
+    return { proj, samples, length: samples.length ? samples[samples.length - 1].s : 0 };
+  }
+
+  function build(prep, data) {
+    const { proj, samples } = prep;
+    const kap = curvatures(samples, 3);
+    let corners = findCorners(samples, kap);
+    const grid = buildGrid(samples, 25);
+    const notes = [];
+    const els = (data.osm && data.osm.elements) || [];
+    const ways = els.filter((e) => e.type === 'way');
+    const nodes = els.filter((e) => e.type === 'node');
+    const assigned = ways.length ? matchWays(samples, grid, proj, ways) : new Array(samples.length).fill(null);
+
+    // speed limits per sample (km/h)
+    const limits = assigned.map((t) => {
+      if (!t || !t.maxspeed) return null;
+      const m = /^(\d+)\s*(mph)?/.exec(t.maxspeed);
+      if (!m) return null;
+      return m[2] ? Math.round(+m[1] * 1.609) : +m[1];
+    });
+
+    // roundabouts: suppress geometric corners inside, emit one note
+    const rbRuns = runsWhere(samples, assigned, (t) => t.junction === 'roundabout' || t.junction === 'circular', 5);
+    const steps = data.steps || [];
+    let stepS = 0;
+    const stepAt = steps.map((st) => { const s = stepS; stepS += st.distance || 0; return { st, s }; });
+    const rbSteps = stepAt.filter((x) => /roundabout|rotary/.test(x.st.maneuver.type) && !/exit/.test(x.st.maneuver.type));
+    const usedRb = new Set();
+    for (const r of rbRuns) {
+      const s0 = samples[r.a].s, s1 = samples[r.b].s;
+      let exit = null;
+      for (let k = 0; k < rbSteps.length; k++) {
+        if (Math.abs(rbSteps[k].s - s0) < 60 && !usedRb.has(k)) { exit = rbSteps[k].st.maneuver.exit || null; usedRb.add(k); break; }
+      }
+      notes.push({ kind: 'roundabout', s: s0, sEnd: s1, exit, i0: r.a });
+    }
+    // roundabouts OSRM knows about but OSM matching missed
+    rbSteps.forEach((x, k) => {
+      if (usedRb.has(k)) return;
+      notes.push({ kind: 'roundabout', s: x.s, sEnd: x.s + 50, exit: x.st.maneuver.exit || null, i0: Math.round(x.s / STEP) });
+    });
+    const rbNotes = notes.filter((n) => n.kind === 'roundabout');
+    corners = corners.filter((c) => !rbNotes.some((r) => c.sEnd >= r.s - 15 && c.s <= r.sEnd + 15));
+
+    // junction turns from OSRM steps
+    for (const { st, s } of stepAt) {
+      const t = st.maneuver.type, m = st.maneuver.modifier || '';
+      if (/roundabout|rotary|depart|arrive/.test(t)) continue;
+      if (!/left|right/.test(m)) continue;
+      if ((t === 'new name' || t === 'continue') && /slight/.test(m)) continue;
+      const dir = /left/.test(m) ? 'left' : 'right';
+      const c = corners.find((c) => s >= c.s - 25 && s <= c.sEnd + 25 && c.dir === dir);
+      const kind = t === 'fork' ? 'keep' : 'junction';
+      if (c) { c.junction = kind; c.road = st.name || ''; }
+      else notes.push({ kind, s: Math.max(0, s - 5), dir, road: st.name || '', i0: Math.round(s / STEP) });
+    }
+
+    notes.push(...corners);
+
+    // point hazards
+    const TC = { bump: 'bump', hump: 'bump', table: 'bump', cushion: 'bump', rumble_strip: 'rumble strip', dip: 'dip', chicane: 'chicane', choker: 'narrows', island: 'island' };
+    const pointHaz = [];
+    for (const nd of nodes) {
+      const t = nd.tags || {};
+      let what = null, r = 15;
+      if (t.traffic_calming && TC[t.traffic_calming]) what = TC[t.traffic_calming];
+      else if (t.highway === 'speed_camera') { what = 'camera'; r = 30; }
+      else if (t.railway === 'level_crossing') what = 'rail crossing';
+      if (!what) continue;
+      const p = proj.fwd(nd.lat, nd.lon);
+      const i = nearestSample(samples, grid, p.x, p.y, r);
+      if (i >= 0) pointHaz.push({ kind: 'hazard', what, s: samples[i].s, i0: i });
+    }
+    pointHaz.sort((a, b) => a.s - b.s);
+    for (const h of pointHaz) {
+      const prev = notes.find((n) => n.kind === 'hazard' && n.what.startsWith(h.what.replace(/s$/, '')) && h.s - n.s < 60 && h.s >= n.s);
+      if (prev && h.what === 'bump') { prev.what = 'bumps'; continue; }
+      if (prev) continue;
+      notes.push(h);
+    }
+
+    // way-based hazards
+    const isUnpaved = (t) => t.surface && UNPAVED.has(t.surface);
+    const isCobble = (t) => t.surface && COBBLE.has(t.surface);
+    for (const r of runsWhere(samples, assigned, (t) => t.bridge && t.bridge !== 'no', 15)) notes.push({ kind: 'hazard', what: 'bridge', s: samples[r.a].s, i0: r.a });
+    for (const r of runsWhere(samples, assigned, (t) => t.tunnel && t.tunnel !== 'no', 20)) notes.push({ kind: 'hazard', what: 'tunnel', s: samples[r.a].s, i0: r.a });
+    for (const r of runsWhere(samples, assigned, isUnpaved, 40)) {
+      notes.push({ kind: 'hazard', what: 'gravel', s: samples[r.a].s, i0: r.a });
+      if (r.b < samples.length - 10) notes.push({ kind: 'hazard', what: 'tarmac', s: samples[r.b].s, i0: r.b });
+    }
+    for (const r of runsWhere(samples, assigned, isCobble, 40)) notes.push({ kind: 'hazard', what: 'cobbles', s: samples[r.a].s, i0: r.a });
+    for (const r of runsWhere(samples, assigned, (t) => t.highway === 'construction' || t.construction, 20)) notes.push({ kind: 'hazard', what: 'roadworks', s: samples[r.a].s, i0: r.a });
+
+    // crests
+    const skip = assigned.map((t) => !!(t && ((t.bridge && t.bridge !== 'no') || (t.tunnel && t.tunnel !== 'no'))));
+    for (const c of findCrests(samples, data.elevation, skip)) {
+      const host = corners.find((k) => c.s >= k.s - 10 && c.s <= k.sEnd + 10);
+      if (host) host.crest = true;
+      else notes.push(c);
+    }
+
+    notes.push({ kind: 'finish', s: prep.length, i0: samples.length - 1 });
+    notes.sort((a, b) => a.s - b.s);
+    notes.forEach((n, k) => {
+      n.id = k;
+      const nx = notes[k + 1];
+      n.gapNext = nx ? Math.max(0, nx.s - (n.sEnd || n.s)) : null;
+    });
+    return { notes, limits };
+  }
+
+  // ---------- phrasing ----------
+  const SIMPLE = ['', 'hard', 'hard', 'medium', 'medium', 'easy', 'easy'];
+  function cornerWords(n, o) {
+    let w;
+    if (o.mode === 'simple') w = n.hairpin ? `hairpin ${n.dir}` : `${SIMPLE[n.grade]} ${n.dir}`;
+    else w = n.hairpin ? `${n.dir} hairpin` : `${n.dir} ${n.grade}`;
+    const mods = [];
+    if (n.shape === 'tightens') mods.push('tightens');
+    if (o.mode !== 'simple') {
+      if (n.shape === 'opens') mods.push('opens');
+      if (n.long) mods.push('long');
+      if (n.crest) mods.push('over crest');
+    }
+    let pre = '';
+    if (n.junction === 'junction') pre = 'junction, ';
+    if (n.junction === 'keep') pre = 'keep, ';
+    return pre + [w, ...mods].join(' ');
+  }
+
+  function noteWords(n, o) {
+    switch (n.kind) {
+      case 'corner': return cornerWords(n, o);
+      case 'junction': return `junction ${n.dir}`;
+      case 'keep': return `keep ${n.dir}`;
+      case 'roundabout': return n.exit ? `roundabout, exit ${n.exit}` : 'roundabout';
+      case 'hazard': return n.what;
+      case 'crest': return 'crest';
+      case 'finish': return 'finish';
+    }
+    return '';
+  }
+
+  const M_STEPS = [30, 40, 50, 70, 100, 120, 150, 200, 250, 300];
+  const FT_STEPS = [100, 150, 200, 250, 300, 400, 500, 600, 800, 1000];
+  function distWord(m, units) {
+    const arr = units === 'imperial' ? FT_STEPS : M_STEPS;
+    const v = units === 'imperial' ? m * 3.281 : m;
+    let best = arr[0];
+    for (const a of arr) if (Math.abs(a - v) < Math.abs(best - v)) best = a;
+    return String(best);
+  }
+
+  function noteVisible(n, o) {
+    if (n.kind === 'corner') {
+      if (o.detail === 'no6' && n.grade === 6 && !n.junction) return false;
+      if (o.detail === 'major' && n.grade >= 5 && !n.junction) return false;
+    }
+    if (n.kind === 'hazard' && !o.hazards) return false;
+    if (n.kind === 'hazard' && n.what === 'camera' && !o.cameras) return false;
+    if (n.kind === 'crest' && !o.crests) return false;
+    return true;
+  }
+
+  // Build a spoken phrase starting at note index k. Returns {text, consumed:[ids], display}
+  function phrase(notes, k, o) {
+    const used = [notes[k].id];
+    let text = noteWords(notes[k], o);
+    let cur = notes[k];
+    let j = k + 1, chained = 0;
+    while (j < notes.length && chained < 2) {
+      const nx = notes[j];
+      if (!noteVisible(nx, o)) { j++; continue; }
+      const gap = nx.s - (cur.sEnd || cur.s);
+      if (gap < 15) text += ' into ' + noteWords(nx, o);
+      else if (gap < 35) text += ' and ' + noteWords(nx, o);
+      else break;
+      used.push(nx.id); cur = nx; j++; chained++;
+    }
+    // distance to the next callable note
+    while (j < notes.length && !noteVisible(notes[j], o)) j++;
+    if (j < notes.length && cur.kind !== 'finish') {
+      const gap = notes[j].s - (cur.sEnd || cur.s);
+      if (gap >= 35 && gap <= 320) text += ', ' + distWord(gap, o.units);
+    }
+    return { text, used };
+  }
+
+  const api = { prepare, build, phrase, noteWords, noteVisible, distWord, STEP, gradeFromRadius };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Engine = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const E = window.Engine;
+
+  // ---------- settings ----------
+  const DEFAULTS = { mode: 'advanced', timing: 'standard', detail: 'all', units: 'metric', voice: '', rate: '1.15', hazards: true, cameras: true, crests: true, codriver: false };
+  let S = { ...DEFAULTS };
+  try { Object.assign(S, JSON.parse(localStorage.getItem('rally-settings') || '{}')); } catch (e) {}
+  const save = () => { try { localStorage.setItem('rally-settings', JSON.stringify(S)); } catch (e) {} };
+  const bind = [['setMode', 'mode'], ['setTiming', 'timing'], ['setDetail', 'detail'], ['setUnits', 'units'], ['setVoice', 'voice'], ['setRate', 'rate']];
+  const bindChk = [['setHazards', 'hazards'], ['setCameras', 'cameras'], ['setCrests', 'crests'], ['setCodriver', 'codriver']];
+  function loadVoices() {
+    const sel = $('setVoice');
+    const vs = (window.speechSynthesis ? speechSynthesis.getVoices() : []).filter((v) => /^en/i.test(v.lang));
+    sel.innerHTML = '<option value="">Default voice</option>' + vs.map((v) => `<option value="${v.name}">${v.name} (${v.lang})</option>`).join('');
+    sel.value = S.voice;
+  }
+  if (window.speechSynthesis) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+  bind.forEach(([id, k]) => { const el = $(id); el.value = S[k]; el.onchange = () => { S[k] = el.value; save(); onSettingsChanged(); }; });
+  bindChk.forEach(([id, k]) => { const el = $(id); el.checked = !!S[k]; el.onchange = () => { S[k] = el.checked; save(); onSettingsChanged(); }; });
+  $('btnSettings').onclick = () => { $('settings').style.display = 'flex'; };
+  $('btnCloseSettings').onclick = () => { $('settings').style.display = 'none'; };
+  $('settings').onclick = (e) => { if (e.target.id === 'settings') $('settings').style.display = 'none'; };
+  $('btnTestVoice').onclick = () => speak('left 4 tightens into right 2, 100', true);
+  const opts = () => ({ mode: S.mode, units: S.units, detail: S.detail, hazards: S.hazards, cameras: S.cameras, crests: S.crests });
+  function onSettingsChanged() { if (route) renderPreview(); }
+
+  // ---------- units ----------
+  const imp = () => S.units === 'imperial';
+  const fmtDist = (m) => imp() ? (m < 300 ? Math.round(m * 3.281 / 10) * 10 + ' ft' : (m / 1609.34).toFixed(m < 16000 ? 1 : 0) + ' mi') : (m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(m < 10000 ? 1 : 0) + ' km');
+  const fmtSpeed = (ms) => Math.round(imp() ? ms * 2.23694 : ms * 3.6);
+  const fmtLimit = (kmh) => imp() ? Math.round(kmh / 1.609 / 5) * 5 : kmh;
+
+  // ---------- map ----------
+  const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([39.5, -98.35], 4);
+  const tiles = () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd', attribution: '&copy; OpenStreetMap &copy; CARTO' });
+  tiles().addTo(map);
+  let routeLayer = null, markerLayer = L.layerGroup().addTo(map), startMk = null, endMk = null;
+  let mini = null, miniCar = null, miniRoute = null;
+
+  // ---------- planning ----------
+  let startPt = null, endPt = null, tapMode = null, route = null, building = false;
+  const status = (t) => { $('status').textContent = t; };
+  function setPt(which, lat, lon, label) {
+    const pt = { lat, lon, label };
+    if (which === 'start') { startPt = pt; $('from').value = label; if (startMk) startMk.remove(); startMk = L.circleMarker([lat, lon], { radius: 8, color: '#52c41a', fillOpacity: 1 }).addTo(map); }
+    else { endPt = pt; $('to').value = label; if (endMk) endMk.remove(); endMk = L.circleMarker([lat, lon], { radius: 8, color: '#ff4d4f', fillOpacity: 1 }).addTo(map); }
+  }
+  ['tapStart', 'tapEnd'].forEach((id) => {
+    $(id).onclick = () => {
+      tapMode = tapMode === id ? null : id;
+      $('tapStart').classList.toggle('on', tapMode === 'tapStart');
+      $('tapEnd').classList.toggle('on', tapMode === 'tapEnd');
+      status(tapMode ? 'Tap the map to place the ' + (tapMode === 'tapStart' ? 'start' : 'end') : '');
+    };
+  });
+  map.on('click', (e) => {
+    if (!tapMode) return;
+    const which = tapMode === 'tapStart' ? 'start' : 'end';
+    setPt(which, e.latlng.lat, e.latlng.lng, `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+    tapMode = null; $('tapStart').classList.remove('on'); $('tapEnd').classList.remove('on'); status('');
+  });
+  $('from').oninput = () => { startPt = null; };
+  $('to').oninput = () => { endPt = null; };
+  $('btnHere').onclick = () => {
+    if (!navigator.geolocation) return status('This browser has no GPS access.');
+    status('Getting your location...');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setPt('start', p.coords.latitude, p.coords.longitude, 'My location'); map.setView([p.coords.latitude, p.coords.longitude], 13); status(''); },
+      (err) => status('Location failed: ' + err.message + '. The page must be opened over https.'),
+      { enableHighAccuracy: true, timeout: 15000 });
+  };
+
+  async function fetchJSON(url, init, ms) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), ms || 30000);
+    try {
+      const r = await fetch(url, { ...(init || {}), signal: ctl.signal });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } finally { clearTimeout(t); }
+  }
+
+  async function geocode(q, box) {
+    const c = map.getCenter();
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=' + encodeURIComponent(q);
+    const res = await fetchJSON(url, { headers: { 'Accept-Language': 'en' } }, 15000);
+    if (!res.length) throw new Error('No place found for "' + q + '"');
+    return res;
+  }
+
+  async function resolve(which) {
+    const pt = which === 'start' ? startPt : endPt;
+    if (pt) return pt;
+    const q = $(which === 'start' ? 'from' : 'to').value.trim();
+    if (!q) throw new Error(which === 'start' ? 'Enter a start, or tap "My location".' : 'Enter a destination.');
+    const res = await geocode(q);
+    const box = $(which === 'start' ? 'fromResults' : 'toResults');
+    if (res.length > 1) {
+      box.innerHTML = res.map((r, k) => `<button data-k="${k}">${r.display_name}</button>`).join('');
+      box.querySelectorAll('button').forEach((b) => {
+        b.onclick = () => { const r = res[+b.dataset.k]; setPt(which, +r.lat, +r.lon, r.display_name); box.innerHTML = ''; planRoute(); };
+      });
+    }
+    const r = res[0];
+    setPt(which, +r.lat, +r.lon, r.display_name);
+    return which === 'start' ? startPt : endPt;
+  }
+
+  $('btnGo').onclick = () => planRoute();
+  $('to').onkeydown = (e) => { if (e.key === 'Enter') planRoute(); };
+
+  // Douglas-Peucker on projected samples, for the Overpass corridor
+  function simplify(pts, tol) {
+    const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+    const stack = [[0, pts.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      let idx = -1, dm = tol;
+      const A = pts[a], B = pts[b], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
+      for (let i = a + 1; i < b; i++) {
+        const d = Math.abs(dy * pts[i].x - dx * pts[i].y + B.x * A.y - B.y * A.x) / L;
+        if (d > dm) { dm = d; idx = i; }
+      }
+      if (idx > 0) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+    }
+    return pts.filter((_, i) => keep[i]);
+  }
+
+  async function fetchOSM(samples) {
+    let tol = 4, line = simplify(samples, tol);
+    while (line.length > 1800) { tol *= 1.6; line = simplify(samples, tol); }
+    const coords = line.map((p) => p.lat.toFixed(6) + ',' + p.lon.toFixed(6)).join(',');
+    const q = `[out:json][timeout:90];(way(around:${Math.round(18 + tol)},${coords})[highway];node(around:20,${coords})[traffic_calming];node(around:35,${coords})[highway=speed_camera];node(around:20,${coords})[railway=level_crossing];);out geom;`;
+    const hosts = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+    let lastErr;
+    for (const h of hosts) {
+      try { return await fetchJSON(h, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 90000); }
+      catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  }
+
+  async function fetchElevation(samples) {
+    let every = 6; // 30 m
+    while (samples.length / every > 3000) every *= 2;
+    const idx = [];
+    for (let i = 0; i < samples.length; i += every) idx.push(i);
+    const batches = [];
+    for (let k = 0; k < idx.length; k += 100) batches.push(idx.slice(k, k + 100));
+    const out = new Array(idx.length);
+    let next = 0;
+    async function worker() {
+      while (next < batches.length) {
+        const b = next++;
+        const ids = batches[b];
+        const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + ids.map((i) => samples[i].lat.toFixed(5)).join(',') + '&longitude=' + ids.map((i) => samples[i].lon.toFixed(5)).join(',');
+        const r = await fetchJSON(url, null, 20000);
+        r.elevation.forEach((z, j) => { out[b * 100 + j] = { i: ids[j], z }; });
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+    return out;
+  }
+
+  async function buildRoute(from, to, quiet) {
+    const say = quiet ? () => {} : status;
+    say('Finding route...');
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true`;
+    const rj = await fetchJSON(url, null, 30000);
+    if (!rj.routes || !rj.routes.length) throw new Error('No route found between those points.');
+    const r = rj.routes[0];
+    const latlngs = r.geometry.coordinates.map((c) => [c[1], c[0]]);
+    const steps = r.legs.flatMap((l) => l.steps);
+    const prep = E.prepare(latlngs);
+    const km = prep.length / 1000;
+    let osm = null, elevation = null, warn = [];
+    if (km <= 250) {
+      say(`Route ${fmtDist(prep.length)}. Loading road features...`);
+      try { osm = await fetchOSM(prep.samples); } catch (e) { warn.push('road features unavailable'); }
+      say('Loading elevation...');
+      try { elevation = await fetchElevation(prep.samples); } catch (e) { warn.push('elevation unavailable'); }
+    } else warn.push('route over 250 km: corners only');
+    say('Generating pace notes...');
+    await new Promise((res) => setTimeout(res, 20));
+    const built = E.build(prep, { steps, osm, elevation });
+    return { prep, notes: built.notes, limits: built.limits, latlngs, duration: r.duration, warn, from, to };
+  }
+
+  async function planRoute() {
+    if (building) return;
+    building = true; $('btnGo').disabled = true;
+    try {
+      const a = await resolve('start');
+      const b = await resolve('end');
+      route = await buildRoute(a, b);
+      renderPreview();
+      status(route.warn.length ? 'Note: ' + route.warn.join(', ') : 'Ready. Preview the notes, then Drive or Simulate.');
+    } catch (e) { status(e.message || String(e)); }
+    finally { building = false; $('btnGo').disabled = false; }
+  }
+
+  const gradeCls = (n) => n.kind === 'corner' ? 'g' + n.grade : n.kind === 'finish' ? '' : 'hz';
+  const gradeColor = (g) => g <= 2 ? '#ff4d4f' : g <= 4 ? '#ffa940' : '#52c41a';
+
+  function renderPreview() {
+    const o = opts();
+    if (routeLayer) routeLayer.remove();
+    markerLayer.clearLayers();
+    routeLayer = L.polyline(route.latlngs, { color: '#4096ff', weight: 5, opacity: .85 }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [20, 20] });
+    const vis = route.notes.filter((n) => E.noteVisible(n, o));
+    const counts = [0, 0, 0, 0, 0, 0, 0];
+    let hz = 0;
+    for (const n of vis) {
+      if (n.kind === 'corner') counts[n.grade]++; else if (n.kind !== 'finish') hz++;
+      const p = route.prep.samples[n.i0] || route.prep.samples[0];
+      if (n.kind === 'corner') {
+        L.circleMarker([p.lat, p.lon], { radius: n.grade <= 2 ? 6 : 4, color: gradeColor(n.grade), weight: 2, fillOpacity: .9 })
+          .bindPopup(E.noteWords(n, o).toUpperCase()).addTo(markerLayer);
+      } else if (n.kind !== 'finish') {
+        L.circleMarker([p.lat, p.lon], { radius: 5, color: '#69b1ff', weight: 2, fillOpacity: .9 }).bindPopup(E.noteWords(n, o).toUpperCase()).addTo(markerLayer);
+      }
+    }
+    const mins = Math.round(route.duration / 60);
+    const sev = S.mode === 'simple'
+      ? `<span>Hard <b>${counts[1] + counts[2]}</b></span><span>Medium <b>${counts[3] + counts[4]}</b></span><span>Easy <b>${counts[5] + counts[6]}</b></span>`
+      : [1, 2, 3, 4, 5, 6].map((g) => `<span class="g${g}">${g}s <b>${counts[g]}</b></span>`).join('');
+    $('summary').innerHTML = `<span><b>${fmtDist(route.prep.length)}</b></span><span><b>${mins}</b> min</span>${sev}<span class="hz">Hazards <b>${hz}</b></span>`;
+    $('notelist').innerHTML = vis.map((n) => `<div class="n" data-i="${n.i0}"><span class="d">${fmtDist(n.s)}</span><span class="${gradeCls(n)}">${E.noteWords(n, o).toUpperCase()}</span></div>`).join('');
+    $('notelist').querySelectorAll('.n').forEach((el) => {
+      el.onclick = () => { const p = route.prep.samples[+el.dataset.i]; if (p) map.setView([p.lat, p.lon], 17); };
+    });
+    $('preview').style.display = 'flex';
+    setTimeout(() => map.invalidateSize(), 50);
+  }
+
+  // ---------- speech ----------
+  let muted = false, speaking = false, speakTimer = null;
+  function speak(text, force) {
+    if (S.codriver && !force) return holdFor(text);
+    if (muted && !force) return holdFor(text);
+    if (!window.speechSynthesis) return holdFor(text);
+    const u = new SpeechSynthesisUtterance(text);
+    const v = speechSynthesis.getVoices().find((v) => v.name === S.voice);
+    if (v) u.voice = v;
+    u.rate = +S.rate || 1.15;
+    u.lang = (v && v.lang) || 'en-US';
+    speaking = true;
+    const done = () => { speaking = false; clearTimeout(speakTimer); };
+    u.onend = done; u.onerror = done;
+    clearTimeout(speakTimer);
+    speakTimer = setTimeout(done, speechDur(text) * 1000 + 2500); // iOS sometimes never fires onend
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+  function holdFor(text) { speaking = true; clearTimeout(speakTimer); speakTimer = setTimeout(() => { speaking = false; }, speechDur(text) * 1000); }
+  function speechDur(text) { return 0.3 + text.split(/[\s,]+/).filter(Boolean).length * 0.34 / (+S.rate || 1.15); }
+
+  // ---------- drive engine ----------
+  const LEAD = { early: 5, standard: 3.5, late: 2.5 };
+  const DMIN = 35;
+  let D = null; // drive state
+  let wakeLock = null;
+
+  function wrap(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+
+  function matchFix(x, y, heading, v) {
+    const s = route.prep.samples, n = s.length;
+    let lo = 0, hi = n - 2;
+    if (D.locked) { lo = Math.max(0, D.idx - 20); hi = Math.min(n - 2, D.idx + Math.ceil((150 + v * 5) / E.STEP)); }
+    let best = null;
+    for (let j = lo; j <= hi; j++) {
+      const a = s[j], b = s[j + 1];
+      const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+      let u = ((x - a.x) * dx + (y - a.y) * dy) / L2; u = Math.max(0, Math.min(1, u));
+      const d = Math.hypot(a.x + u * dx - x, a.y + u * dy - y);
+      if (best && d >= best.d) continue;
+      if (heading != null && v > 3 && Math.abs(wrap(a.h - heading)) > 1.05) continue;
+      best = { d, j, s: a.s + u * (b.s - a.s) };
+    }
+    return best;
+  }
+
+  function onFix(f) {
+    // f: {lat, lon, speed (m/s|null), heading (rad|null), acc, t}
+    if (!D) return;
+    const p = route.prep.proj.fwd(f.lat, f.lon);
+    let v = f.speed;
+    let heading = f.heading;
+    if (D.lastFix) {
+      const dt = (f.t - D.lastFix.t) / 1000, dd = Math.hypot(p.x - D.lastFix.x, p.y - D.lastFix.y);
+      if (v == null && dt > 0) v = dd / dt;
+      if (heading == null && dd > 4) heading = Math.atan2(p.x - D.lastFix.x, p.y - D.lastFix.y);
+    }
+    v = Math.min(70, Math.max(0, v || 0));
+    D.lastFix = { x: p.x, y: p.y, t: f.t };
+    D.lastFixWall = performance.now();
+    D.v = v; D.acc = f.acc;
+    if (D.gpsLost) { D.gpsLost = false; announce('GPS back'); }
+    if (f.acc > 35 && performance.now() - (D.weakAt || -1e9) > 60000) { D.weakAt = performance.now(); announce('GPS weak'); }
+    const m = matchFix(p.x, p.y, heading, v);
+    const tol = Math.max(40, Math.min(80, (f.acc || 10) * 1.5));
+    if (m && m.d < tol) {
+      // along-route speed for dead reckoning; never trust a jump
+      let drV = v;
+      if (D.locked && D.prevMatchT != null) {
+        const dt = (f.t - D.prevMatchT) / 1000;
+        if (dt > 0) { const along = (m.s - D.fixS) / dt; if (f.speed == null) drV = Math.max(0, along); }
+      }
+      D.drV = Math.min(drV, 70);
+      D.locked = true; D.idx = m.j; D.fixS = m.s; D.fixT = performance.now(); D.off = 0; D.prevMatchT = f.t;
+    } else {
+      D.drV = 0; D.fixT = performance.now(); // freeze position while off the line
+      D.off++;
+      if (D.off >= 3 && (f.acc || 99) < 50 && performance.now() - (D.rerouteAt || -1e9) > 20000) reroute(f);
+    }
+    if (D.car) D.car.setLatLng([f.lat, f.lon]);
+    if (mini && D.follow) { const z = mini.getZoom(); mini.setView([f.lat, f.lon], Number.isFinite(z) ? Math.max(15, z) : 16, { animate: false }); }
+    $('speed').textContent = fmtSpeed(v);
+    const lim = route.limits && route.limits[D.idx];
+    $('limit').className = lim ? '' : 'none';
+    if (lim) $('limit').textContent = fmtLimit(lim);
+    $('gps').textContent = `GPS ±${Math.round(f.acc || 0)} m` + (D.locked ? '' : ' · finding route');
+  }
+
+  function announce(text) { if (!D) return; D.sysQueue.push(text); }
+
+  async function reroute(f) {
+    D.rerouteAt = performance.now();
+    announce('off route, rerouting');
+    try {
+      const fresh = await buildRoute({ lat: f.lat, lon: f.lon }, route.to, true);
+      if (!D) return;
+      route = fresh;
+      D.locked = false; D.idx = 0; D.fixS = 0; D.ptr = 0; D.spoken = new Set(); D.off = 0; D.prevMatchT = null; D.drV = 0;
+      if (miniRoute) miniRoute.setLatLngs(route.latlngs);
+      renderPreview();
+      announce('route updated');
+    } catch (e) { announce('reroute failed'); }
+  }
+
+  function tick() {
+    if (!D) return;
+    const now = performance.now();
+    if (D.lastFixWall && now - D.lastFixWall > 8000 && !D.gpsLost && !D.sim) { D.gpsLost = true; announce('GPS lost'); $('gps').textContent = 'GPS lost'; }
+    // dead reckoning between fixes
+    const vr = D.drV || 0;
+    const sEst = D.locked ? D.fixS + Math.min(vr * (now - D.fixT) / 1000, vr * 2) : -1;
+    D.sEst = sEst;
+    const notes = route.notes, o = opts();
+    if (!speaking && D.sysQueue.length) { speak(D.sysQueue.shift()); return; }
+    if (!D.locked) return;
+    while (D.ptr < notes.length && (D.spoken.has(notes[D.ptr].id) || !E.noteVisible(notes[D.ptr], o) || notes[D.ptr].s < sEst - 5)) D.ptr++;
+    renderUpcoming(sEst);
+    if (speaking || D.ptr >= notes.length) return;
+    const n = notes[D.ptr];
+    const ph = E.phrase(notes, D.ptr, o);
+    const trig = Math.max(DMIN, vr * (LEAD[S.timing] + speechDur(ph.text)));
+    if (n.s - sEst <= trig) {
+      ph.used.forEach((id) => D.spoken.add(id));
+      showCall(ph.text);
+      speak(ph.text);
+      if (n.kind === 'finish') setTimeout(() => { if (D) stopDrive(); }, 4000);
+    }
+  }
+
+  function showCall(text) {
+    const el = $('call');
+    const m = /^(.*), (\d+)$/.exec(text);
+    const main = (m ? m[1] : text).replace(/,/g, '');
+    el.innerHTML = '';
+    el.appendChild(document.createTextNode(main));
+    if (m) { const sm = document.createElement('small'); sm.textContent = m[2] + (imp() ? ' ft' : ' m'); el.appendChild(sm); }
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    if (S.codriver && navigator.vibrate) navigator.vibrate(/hard|hairpin| 1| 2/.test(text) ? [120, 60, 120] : 80);
+  }
+
+  function renderUpcoming(sEst) {
+    if (!D || now() - (D.upAt || 0) < 500) return;
+    D.upAt = now();
+    const o = opts(), out = [];
+    for (let k = D.ptr; k < route.notes.length && out.length < 3; k++) {
+      const n = route.notes[k];
+      if (!E.noteVisible(n, o) || D.spoken.has(n.id)) continue;
+      out.push(`<div><span>${fmtDist(Math.max(0, n.s - sEst))}</span><b>${E.noteWords(n, o)}</b></div>`);
+    }
+    $('next').innerHTML = out.join('');
+    $('remain').textContent = fmtDist(Math.max(0, route.prep.length - sEst)) + ' to go';
+  }
+  const now = () => performance.now();
+
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (D && document.visibilityState === 'visible') keepAwake(); });
+
+  function startDrive(sim) {
+    if (!route) return;
+    // prime speech inside the tap (required on iOS)
+    speak(sim ? 'simulation, co-driver ready' : 'co-driver ready', true);
+    D = { sim, locked: false, idx: 0, fixS: 0, fixT: 0, v: 0, ptr: 0, spoken: new Set(), off: 0, sysQueue: [], follow: true };
+    $('drive').style.display = 'flex';
+    $('driveMode').textContent = sim ? 'SIMULATION' : (S.codriver ? 'CO-DRIVER MODE' : 'DRIVE');
+    $('call').textContent = 'READY';
+    $('speedunit').textContent = imp() ? 'mph' : 'km/h';
+    if (!mini) {
+      mini = L.map('minimap', { zoomControl: false, attributionControl: false, dragging: true });
+      tiles().addTo(mini);
+    }
+    if (miniRoute) miniRoute.remove();
+    miniRoute = L.polyline(route.latlngs, { color: '#4096ff', weight: 5 }).addTo(mini);
+    D.car = L.circleMarker(route.latlngs[0], { radius: 8, color: '#fff', fillColor: '#ffb020', fillOpacity: 1, weight: 3 }).addTo(mini);
+    setTimeout(() => { mini.invalidateSize(); mini.setView(route.latlngs[0], 16); }, 50);
+    mini.on('dragstart', () => { if (D) D.follow = false; setTimeout(() => { if (D) D.follow = true; }, 8000); });
+    keepAwake();
+    D.tickTimer = setInterval(tick, 200);
+    if (sim) startSim();
+    else if (navigator.geolocation) {
+      D.watch = navigator.geolocation.watchPosition(
+        (p) => onFix({ lat: p.coords.latitude, lon: p.coords.longitude, speed: p.coords.speed, heading: p.coords.heading == null || isNaN(p.coords.heading) || (p.coords.speed || 0) < 2 ? null : p.coords.heading * Math.PI / 180, acc: p.coords.accuracy, t: p.timestamp || Date.now() }),
+        (err) => { $('gps').textContent = 'GPS error: ' + err.message; },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+    } else $('gps').textContent = 'No GPS in this browser';
+  }
+
+  function stopDrive() {
+    if (!D) return;
+    clearInterval(D.tickTimer); clearInterval(D.simTimer);
+    if (D.watch != null) navigator.geolocation.clearWatch(D.watch);
+    if (D.car) D.car.remove();
+    D = null;
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    speaking = false;
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    $('drive').style.display = 'none';
+  }
+
+  // ---------- simulator ----------
+  const CORNER_KMH = [0, 28, 42, 58, 76, 96, 120];
+  function startSim() {
+    const target = +$('simSpeed').value / 3.6;
+    let s = 0, v = 0, t = Date.now();
+    const samples = route.prep.samples, L0 = route.prep.length;
+    D.simTimer = setInterval(() => {
+      if (!D) return;
+      const notes = route.notes;
+      let allowed = target;
+      for (const n of notes) {
+        if (n.s > s + 400) break;
+        let vc = null;
+        if (n.kind === 'corner') vc = (n.hairpin ? 22 : CORNER_KMH[n.grade]) / 3.6;
+        else if (n.kind === 'roundabout') vc = 25 / 3.6;
+        else if (n.kind === 'junction' || n.kind === 'keep') vc = 30 / 3.6;
+        if (vc == null) continue;
+        const end = n.sEnd || n.s + 10;
+        if (s >= n.s - 5 && s <= end) allowed = Math.min(allowed, vc);
+        else if (n.s > s) allowed = Math.min(allowed, Math.sqrt(vc * vc + 2 * 3.5 * (n.s - s)));
+      }
+      v = allowed > v ? Math.min(allowed, v + 2.5) : Math.max(allowed, v - 6);
+      s = Math.min(L0, s + v);
+      t += 1000;
+      const i = Math.min(samples.length - 1, Math.round(s / E.STEP));
+      const p = samples[i];
+      onFix({ lat: p.lat, lon: p.lon, speed: v, heading: v > 2 ? p.h : null, acc: 5, t });
+      if (s >= L0) clearInterval(D.simTimer);
+    }, 1000);
+  }
+
+  $('btnDrive').onclick = () => startDrive(false);
+  $('btnSim').onclick = () => startDrive(true);
+  $('btnStop').onclick = () => stopDrive();
+  $('btnMute').onclick = () => { muted = !muted; $('btnMute').textContent = muted ? 'Unmute' : 'Mute'; if (muted && window.speechSynthesis) speechSynthesis.cancel(); };
+
+  // expose a little for debugging
+  window.__rally = { get route() { return route; }, get drive() { return D; }, buildRoute, onFix };
+})();
+</script>
+</body>
+</html>
